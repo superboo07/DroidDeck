@@ -11,7 +11,7 @@
 FROM docker.io/library/debian:trixie-slim
 
 # tools/build_local.sh: curl tar zstd shasum (perl) unzip python3 gh; the
-# helper builds also use make and patch (tools/proot/build.sh) and git.
+# helper builds also use make, patch and GNU awk (tools/proot/build.sh) and git.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 	&& apt-get install -y --no-install-recommends \
 		build-essential \
@@ -28,6 +28,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 		unzip \
 		zip \
 		patch \
+		gawk \
 		jq \
 	&& apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -71,12 +72,19 @@ RUN set -eu; \
 	cargo install cargo-ndk --locked; \
 	rm -rf /root/.cargo/registry /root/.cargo/git
 
+# Go for tools/syncthing/build.sh. Debian's Go only bootstraps: the script sets
+# GOTOOLCHAIN to the fork's pinned go_version, which Go downloads and verifies.
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+	&& apt-get install -y --no-install-recommends golang-go \
+	&& apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Fail the image build, not the first configure inside it.
 RUN set -e; \
 	java -version 2>&1 | grep -q '"17\.' || { echo "Java 17 missing (README.md Build, CI setup-java)" >&2; exit 1; }; \
 	python3 -c 'import sys; assert sys.version_info >= (3, 11)' || { echo "Python 3 too old (README.md Build)" >&2; exit 1; }; \
 	rustup target list --installed | grep -qx aarch64-linux-android || { echo "Rust target aarch64-linux-android missing (CI)" >&2; exit 1; }; \
 	cargo ndk --version; gh --version; \
+	go version; \
 	for t in curl tar zstd shasum unzip python3 make patch git; do \
 		command -v "$t" >/dev/null || { echo "$t missing (tools/build_local.sh)" >&2; exit 1; }; \
 	done
