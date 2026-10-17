@@ -1,0 +1,143 @@
+{
+  "name": "droiddeck",
+
+  // **Run by rootless Podman, not Docker** (VS Code: set "dev.containers.dockerPath"
+  // to "podman"; claude.sh passes --docker-path podman).
+  // Everything in here runs as root, which rootless Podman maps to your own
+  // host user: files written in the workspace are owned by you, and root in
+  // here has no privilege you do not have.
+  //
+  // A plain image rather than compose: nothing is per-machine and there is no
+  // second service, and this needs nothing besides podman on the host.
+  "image": "localhost/droiddeck-devcontainer:latest",
+  "runArgs": [
+    // The image is built by initialize.sh; never pull something else by name.
+    "--pull=never",
+    // SELinux labels would deny the bind mounts where SELinux is enforcing.
+    "--security-opt=label=disable",
+    // **Podman, so container builds work in here** (Dockerfile). These apply
+    // inside the user namespace rootless Podman gives us, never to the host.
+    // SYS_ADMIN is for podman's mounts and namespaces; seccomp=unconfined
+    // because the default profile still denies crun's pivot_root and keyctl.
+    // No container socket, no --privileged.
+    "--cap-add=SYS_ADMIN",
+    "--security-opt=seccomp=unconfined",
+  ],
+
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/droiddeck,type=bind",
+  "workspaceFolder": "/workspaces/droiddeck",
+  "overrideCommand": true,
+  "init": true,
+  "shutdownAction": "stopContainer",
+
+  "remoteUser": "root",
+  "containerUser": "root",
+
+  "mounts": [
+
+    // Shell history across rebuilds.
+    "source=droiddeck-bashhistory,target=/commandhistory,type=volume",
+    // Podman's images and layers (container builds in here). On a volume
+    // overlay works natively, and images survive rebuilds.
+    "source=droiddeck-containers,target=/var/lib/containers,type=volume",
+    // The Android SDK/NDK you install with android-sdk.sh (licensed; not in the image).
+    "source=droiddeck-android-sdk,target=/opt/android-sdk,type=volume",
+    // Download caches: Gradle wrapper and dependencies, cargo registry, and
+    // build_local.sh's step cache (~/.cache/droiddeck-build).
+    "source=droiddeck-gradle,target=/root/.gradle,type=volume",
+    "source=droiddeck-cargo-registry,target=/root/.cargo/registry,type=volume",
+    "source=droiddeck-cargo-git,target=/root/.cargo/git,type=volume",
+    "source=droiddeck-cache,target=/root/.cache,type=volume",
+    // Gradle's project cache and the CMake trees record absolute paths, which
+    // differ between this container and a host build of the same tree.
+    "source=droiddeck-gradle-project,target=/workspaces/droiddeck/.gradle,type=volume",
+    "source=droiddeck-cxx,target=/workspaces/droiddeck/app/.cxx,type=volume",
+
+    // **No credential is bound in from the host.** No ~/.ssh, no ~/.gitconfig,
+    // no Claude login: each of those is a volume the container owns and you
+    // fill in once, from inside. A key generated or pasted in here stays here
+    // and survives a rebuild, and a host key is never exposed to anything
+    // running in the container. The exceptions are your skills and installed
+    // plugins, below, which are read-only and hold no secret.
+    //
+    // git's global config is a volume too, and containerEnv points
+    // GIT_CONFIG_GLOBAL into it -- which is also what makes the copy of the
+    // host's ~/.gitconfig that the Dev Containers extension drops in inert.
+    // HTTP(S) push credentials are stored here too (credentials, set up by
+    // the Dockerfile's credential.helper), so they survive rebuilds as well.
+    "source=droiddeck-ssh,target=/root/.ssh,type=volume",
+    "source=droiddeck-gitconfig,target=/root/.config/git,type=volume",
+    // Claude Code's credentials, settings and per-project history.
+    "source=droiddeck-claude,target=/root/.claude,type=volume",
+    // gh's login (build_local.sh downloads release assets with it).
+    "source=droiddeck-gh,target=/root/.config/gh,type=volume",
+    // adb's key, which paired devices trust.
+    "source=droiddeck-android,target=/root/.android,type=volume",
+    // Your own skills, read-only, over the volume above (the shorter path is
+    // mounted first, so this lands inside the volume).
+    "source=${localEnv:HOME}/.claude/skills,target=/root/.claude/skills,type=bind,readonly",
+    // Your installed plugins, read-only, the same way: install and update them
+    // on the host. Mounted twice because installed_plugins.json and
+    // known_marketplaces.json record absolute host paths -- the host path makes
+    // those resolve, the /root one is where CLAUDE_CONFIG_DIR looks for the
+    // manifests. enable-plugins.sh enables each in this container's settings.
+    "source=${localEnv:HOME}/.claude/plugins,target=/root/.claude/plugins,type=bind,readonly",
+    "source=${localEnv:HOME}/.claude/plugins,target=${localEnv:HOME}/.claude/plugins,type=bind,readonly",
+    // Plugins' own persistent state (CLAUDE_PLUGIN_DATA) must be writable, and
+    // is the container's, never the host's.
+    "source=droiddeck-claude-plugindata,target=/root/.claude/plugins/data,type=volume"
+  ],
+
+  "containerEnv": {
+
+    // git's global config lives on a volume, not in the container's filesystem
+    // and not copied from the host. This is what points git at it -- and it is
+    // also what makes the Dev Containers extension's own copy of the host
+    // ~/.gitconfig irrelevant, which matters because that copy names a signing
+    // key at a host path that does not exist in here and every commit then dies
+    // with "Couldn't load public key".
+    //
+    // Your identity and your key are yours to put in, once, from inside the
+    // container. They persist across rebuilds because the volume does.
+    "GIT_CONFIG_GLOBAL": "/root/.config/git/config",
+
+    // Keep all Claude Code state (credentials, .claude.json, projects/) in the
+    // one volume, so a rebuild does not ask for a login again.
+    "CLAUDE_CONFIG_DIR": "/root/.claude"
+  },
+
+  // **The channels VS Code itself opens to host credentials**: it forwards the
+  // host's ssh agent and injects its own askpass and GitHub token into
+  // terminals. Blanked here (remoteEnv, because they must override what VS Code
+  // injects); the vscode settings below turn the injection off too.
+  "remoteEnv": {
+    "SSH_AUTH_SOCK": "",
+    "GIT_ASKPASS": "",
+    "GITHUB_TOKEN": ""
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "fwcd.kotlin",
+        "rust-lang.rust-analyzer",
+        "ms-python.python"
+      ],
+      "settings": {
+        "git.terminalAuthentication": false,
+        "github.gitAuthentication": false
+      }
+    }
+  },
+
+  // **Runs on the host, before the container exists.** Builds the image with a
+  // plain `podman build` -- see initialize.sh for why the tooling's own build
+  // is not used.
+  "initializeCommand": "bash .devcontainer/initialize.sh",
+
+  // Setup actions only. What you need to read is in welcome.sh, which claude.sh
+  // and every new terminal show -- this hook's output only reaches a log.
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "waitFor": "postCreateCommand"
+}
