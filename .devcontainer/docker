@@ -1,0 +1,13 @@
+#!/bin/bash
+# `docker` for tools/docker_preflight.py, which expects Docker's wording where podman's differs.
+if [ "${1:-}" = info ]; then
+    set -- "${@//"{{.ServerVersion}}"/"{{.Version.Version}}"}"
+elif [ "${1:-}" = image ] && [ "${2:-}" = inspect ]; then
+    err=$(mktemp)
+    podman "$@" 2>"$err"
+    rc=$?
+    sed 's/image not known/No such image/' "$err" >&2
+    rm -f "$err"
+    exit "$rc"
+fi
+exec podman "$@"
