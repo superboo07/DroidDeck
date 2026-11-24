@@ -7,10 +7,10 @@
 
 # Dev container
 
-- `.devcontainer/` is run by rootless Podman as root (= the host user): `.devcontainer/claude.sh`, or "Reopen in Container" with VS Code's `dev.containers.dockerPath` set to `podman`. Debian trixie with Temurin 17, Rust stable + cargo-ndk, gh, Python 3 and podman; `tools/build_local.sh`'s `docker` builds run in it via podman (no host socket).
+- `.devcontainer/` is run by rootless Podman as root (= the host user): `.devcontainer/claude.sh`, `.devcontainer/bash.sh` for a shell (`--recreate` after a Dockerfile change), or "Reopen in Container" with VS Code's `dev.containers.dockerPath` set to `podman`. Debian trixie with Temurin 17, Rust stable + cargo-ndk, gh, Python 3 and podman; `tools/build_local.sh`'s `docker` builds run in it via podman (no host socket).
 - The Android SDK/NDK is licensed and not in the image: `bash .devcontainer/android-sdk.sh` installs it into a volume after you accept the licence. adb reaches devices over Wireless debugging only.
 - Gradle's `.gradle/`, `app/.cxx/` and the cargo target are container volumes, so host and container builds never share them; APKs still land in `app/build/outputs/`.
-- No host credentials are bound: ssh, git config, gh, adb keys and Claude state are volumes. Only `~/.claude/skills` and `~/.claude/plugins` come in, read-only.
+- No host credentials are bound: ssh, git config, gh, adb keys and Claude state are volumes; only the host's git `user.name`/`user.email` are copied in. Only `~/.claude/skills` and `~/.claude/plugins` come in, read-only.
 
 # Building and testing
 

@@ -33,6 +33,7 @@ password.txt
 __pycache__/
 
 .signing.env
+.devcontainer/*.env
 app/src/main/assets/directaudio/
 app/src/main/assets/hybris/
 /tools/vr/out/

@@ -55,17 +55,18 @@ if ! gh auth token >/dev/null 2>&1; then
 MSG
 fi
 
-
-# The identity git commits with. Nothing is copied from the host: ~/.gitconfig
-# and ~/.ssh are volumes this container owns (see the container config), so the
-# first container asks once and every rebuild after it stays quiet.
-if ! git config --global --get user.email >/dev/null 2>&1; then
+# The identity git commits with. apply-git-identity.sh copies user.name and
+# user.email (only those) from the host's global git config; ~/.gitconfig and
+# ~/.ssh themselves are volumes this container owns (see the container config).
+# This notice therefore only appears when the host has no identity either.
+if ! git config --global --get user.email >/dev/null 2>&1 || ! git config --global --get user.name >/dev/null 2>&1; then
     todo=1
     cat <<'MSG'
 
   ------------------------------------------------------------------
-  git has no identity in this container yet. It is not taken from your
-  host config on purpose -- set it once and the volume keeps it:
+  git has no identity in this container yet, and your host's global git
+  config has none to take it from (set it there and it is picked up on
+  the next start). Or set it here once and the volume keeps it:
 
       git config --global user.name  "you"
       git config --global user.email "you@example.com"

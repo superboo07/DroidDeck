@@ -11,6 +11,9 @@ git config --global --add safe.directory "$PWD" || true
 
 bash .devcontainer/enable-plugins.sh
 
+# The host's git user.name / user.email (nothing else), if initialize.sh found
+# them. Only fills in what is not set yet.
+bash .devcontainer/apply-git-identity.sh
 
 # Everything to tell you -- a missing input, git identity, signing key, the
 # commands -- is in welcome.sh, which checks the state as it is *now* and runs
